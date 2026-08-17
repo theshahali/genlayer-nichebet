@@ -21,8 +21,7 @@ import {
   Vote,
   Layers,
   Flame,
-  Globe,
-  Terminal as TerminalIcon
+  Globe
 } from 'lucide-react';
 
 const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -586,7 +585,7 @@ export default function NicheBetApp() {
             <div className="bg-[#0f172a]/70 rounded-2xl border border-slate-800 p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-xs uppercase font-bold tracking-wider text-purple-400 flex items-center gap-2">
-                  <TerminalIcon className="w-4 h-4" /> Live GenLayer JSON-RPC Execution Stream
+                  <Sparkles className="w-4 h-4" /> Live GenLayer JSON-RPC Execution Stream
                 </h3>
                 <span className="text-emerald-400 text-[11px] font-mono">● LIVE RPC CONNECTED</span>
               </div>
