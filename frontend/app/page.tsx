@@ -24,7 +24,7 @@ import {
   Globe
 } from 'lucide-react';
 
-const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000';
+const CONTRACT_ADDRESS = '0x69Dc02BCeF4573303F5853C274A0bd93b216f2BE';
 const GENLAYER_RPC = 'https://studio.genlayer.com/api';
 
 export default function NicheBetApp() {
