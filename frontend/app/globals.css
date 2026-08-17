@@ -3,12 +3,29 @@
 @tailwind utilities;
 
 :root {
-  --background: #080c14;
-  --foreground: #f8fafc;
+  --background: #090d16;
+  --foreground: #f1f5f9;
 }
 
 body {
-  background-color: var(--background);
+  background: radial-gradient(circle at top right, #1a103c 0%, #090d16 50%, #05070c 100%);
   color: var(--foreground);
-  font-family: 'JetBrains Mono', monospace, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar for Neo-Fintech UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+::-webkit-scrollbar-thumb {
+  background: #2d3748;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a5568;
 }
