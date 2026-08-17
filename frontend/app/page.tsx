@@ -21,7 +21,8 @@ import {
   Vote,
   Layers,
   Flame,
-  Globe
+  Globe,
+  Terminal as TerminalIcon
 } from 'lucide-react';
 
 const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000';
