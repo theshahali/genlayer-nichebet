@@ -6,6 +6,26 @@ An Intelligent Contract protocol built on **GenLayer** that enables trustless, m
 
 ---
 
+## 🔗 Live Deployment & Repository Links
+
+- **GenLayer Explorer Contract**: [`0x69Dc02BCeF4573303F5853C274A0bd93b216f2BE`](https://explorer-studio.genlayer.com/address/0x69Dc02BCeF4573303F5853C274A0bd93b216f2BE)
+- **GitHub Repository**: [`https://github.com/theshahali/genlayer-nichebet`](https://github.com/theshahali/genlayer-nichebet)
+- **Live Frontend Terminal**: [`https://genlayer-nichebet.vercel.app/`](https://genlayer-nichebet.vercel.app/)
+
+---
+
+## ⚡ Real Betting Flow & Bound Settlement Architecture
+
+1. **Finalized On-Chain State Reading**:
+   - The frontend executes real on-chain transactions (`place_bet`, `resolve_market`) and reads the **finalized consensus state directly from the contract** via `gen_callView("get_market")` with zero local verdict substitutions.
+2. **Bound Settlement Relay Authorization (`NicheBetRelay.py`)**:
+   - The settlement relay authorizes EVM Escrow execution (`disburseWinnings` or `refundAll` on `NicheBetEscrow.sol`) **strictly when bound to a verified on-chain verdict matching the exact market ID**.
+   - If `status == "RESOLVED_YES"`, it broadcasts `disburseWinnings` to `bettor_yes`.
+   - If `status == "RESOLVED_NO"`, it broadcasts `disburseWinnings` to `bettor_no`.
+   - If `status == "RESOLVED_VOID"`, it broadcasts `refundAll` to refund 100% of stakes.
+
+---
+
 ## 🌟 The Core Problem
 
 Polymarket and Augur only support massive global markets (e.g. US Presidential Elections, Super Bowl) because spinning up a new market requires $10,000+ UMA dispute bonds and 48-hour challenge delays.
@@ -48,7 +68,7 @@ Consequently, **99.9% of real-world bets cannot exist**:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    LAYER 1: FRONTEND UI                     │
-│    Next.js + Tailwind (Method-Matched GenLayer JSON-RPC)    │
+│    Next.js Neo-Fintech (Finalized GenLayer State Reading)   │
 └──────────────────────────────┬──────────────────────────────┘
                                │ GenLayer RPC (gen_sendTransaction / gen_callView)
 ┌──────────────────────────────▼──────────────────────────────┐
@@ -63,8 +83,8 @@ Consequently, **99.9% of real-world bets cannot exist**:
 ┌──────────────────────────────▼──────────────────────────────┐
 │            LAYER 3: VERIFIED SETTLEMENT RELAY               │
 │                 relay/NicheBetRelay.py                      │
-│   • Reads GenLayer Court resolution outcome                 │
-│   • Calls disburseWinnings / refundAll on EVM Escrow        │
+│   • Authorizes settlement strictly bound to market verdict  │
+│   • Signs and broadcasts EVM disburseWinnings / refundAll   │
 └──────────────────────────────┬──────────────────────────────┘
                                │ EVM Transactions
 ┌──────────────────────────────▼──────────────────────────────┐
@@ -80,12 +100,12 @@ Consequently, **99.9% of real-world bets cannot exist**:
 ## 📖 Project Explorer: How to Try It (Step-by-Step)
 
 ### 1. Open the Live Terminal
-Open the live dashboard at `https://niche-bet-web.vercel.app/` (or run locally).
+Open the live dashboard at [`https://genlayer-nichebet.vercel.app/`](https://genlayer-nichebet.vercel.app/).
 
 ### 2. Create a P2P Market (`create_market`)
 * **Question**: `"Will indie game 'Hollow Rift' reach 10,000 Steam reviews before expiry?"`
-* **Resolution Criteria**: `"Outcome is YES if total Steam reviews >= 10,000 on or before expiry."`
-* **Resolution URL**: `"https://niche-bet-web.vercel.app/demo/mock_market_resolved_yes.html"`
+* **Resolution Criteria**: `"Outcome is YES if total Steam reviews >= 10,000 on or before expiry date."`
+* **Resolution URL**: `"https://genlayer-nichebet.vercel.app/demo/mock_market_resolved_yes.html"`
 * **Expiry Date**: `"2026-08-16"`
 * **Stake Amount**: `100` USDC
 * **Initial Side**: `YES`
@@ -106,10 +126,10 @@ Open the live dashboard at `https://niche-bet-web.vercel.app/` (or run locally).
 ```bash
 # Set environment variables
 export GENLAYER_RPC="https://studio.genlayer.com/api"
-export GENLAYER_COURT_ADDRESS="[DEPLOYED_CONTRACT_ADDRESS]"
+export GENLAYER_COURT_ADDRESS="0x69Dc02BCeF4573303F5853C274A0bd93b216f2BE"
 export EVM_RPC_URL="https://sepolia.base.org"
 export EVM_ESCROW_ADDRESS="0x3Fa9b23f81902c34918239482910394817e12a89"
 
-# Run autonomous relay
+# Run autonomous relay bound to market verdict
 python3 relay/NicheBetRelay.py NICHE_MARKET_001
 ```
