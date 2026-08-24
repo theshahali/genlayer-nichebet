@@ -24,7 +24,7 @@ import {
   Globe 
 } from 'lucide-react';
 
-const CONTRACT_ADDRESS = '0x69Dc02BCeF4573303F5853C274A0bd93b216f2BE';
+const CONTRACT_ADDRESS = '0x2f0F8E897106cd20527d3ABfa31c3f213AA774e5';
 const GENLAYER_RPC = 'https://studio.genlayer.com/api';
 
 export default function NicheBetApp() {
@@ -53,7 +53,7 @@ export default function NicheBetApp() {
     stake_usdc: 100,
     total_pool: 200,
     bettor_yes: '0x5c48c6f77617fc05761433cc4019a79b47d1ec7d',
-    bettor_no: '0x5c48c6f77617fc05761433cc4019a79b47d1ec7d',
+    bettor_no: '0x71546f55c131acd54cf93e181b9cabaeaf440fc3',
     status: 'OPEN_ACCEPTING_BETS',
     verdict: 'PENDING',
     yes_prob: 50,
@@ -214,6 +214,7 @@ export default function NicheBetApp() {
 
   useEffect(() => {
     addLog(`NicheBet Neo-Fintech client initialized. Contract: ${CONTRACT_ADDRESS}`);
+    syncMarketFromChain('NICHE_MARKET_001');
   }, []);
 
   return (
