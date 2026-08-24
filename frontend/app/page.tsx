@@ -54,12 +54,12 @@ export default function NicheBetApp() {
     total_pool: 200,
     bettor_yes: '0x5c48c6f77617fc05761433cc4019a79b47d1ec7d',
     bettor_no: '0x5c48c6f77617fc05761433cc4019a79b47d1ec7d',
-    status: 'RESOLVED_YES',
-    verdict: 'YES',
-    yes_prob: 100,
-    extracted_metric: '12,450 Reviews',
-    confidence: 100,
-    resolution_summary: "MARKET RESOLVED YES: 12,450 Reviews. The authoritative SteamDB metric snapshot confirms 'Hollow Rift' reached 12,450 Steam reviews on or before the expiry date, exceeding the 10,000 review threshold. Payout eligible for YES bettor (0x5c48c6f77617fc05761433cc4019a79b47d1ec7d)."
+    status: 'OPEN_ACCEPTING_BETS',
+    verdict: 'PENDING',
+    yes_prob: 50,
+    extracted_metric: 'Awaiting Consensus',
+    confidence: 0,
+    resolution_summary: 'Market open for P2P bets. Click Resolve to execute GenLayer AI consensus.'
   });
 
   const demoUrls = {
@@ -109,10 +109,14 @@ export default function NicheBetApp() {
             yes_prob: parsed.status === 'RESOLVED_YES' ? 100 : parsed.status === 'RESOLVED_NO' ? 0 : 50
           }));
           addLog(`✓ Finalized on-chain state read: Status=${parsed.status || 'SYNCED'}, Verdict=${parsed.verdict || 'N/A'}`);
+        } else {
+          addLog(`🚨 [FAIL-CLOSED] No contract state returned from GenLayer RPC.`);
         }
+      } else {
+        addLog(`🚨 [FAIL-CLOSED] RPC HTTP error ${res.status}`);
       }
-    } catch (e) {
-      addLog(`Synchronized with GenLayer contract state.`);
+    } catch (e: any) {
+      addLog(`🚨 [FAIL-CLOSED] Contract state read failed: ${e.message}`);
     } finally {
       setIsRpcLoading(false);
     }
