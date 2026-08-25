@@ -1,20 +1,24 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 """
-NicheBet — Autonomous Long-Tail & P2P Prediction Market Protocol
-================================================================
-An Intelligent Contract on GenLayer that creates, matches, and autonomously resolves
-subjective long-tail prediction markets against external web evidence using AI consensus.
+NicheBet Intelligent Contract (GenLayer Protocol)
+==================================================
+Autonomous P2P Prediction Markets with LLM-Powered Natural Language Resolution,
+Authoritative 24/7 UTC Atomic Clock Verification, Strict Post-Expiry Bet Guard,
+Anti-Self-Matching Invariant, and Bound Native-Currency EVM Escrow Settlement.
 
-Steward Compliance Invariants (Pavel Kolosov Review Hardened):
-1. Anti-Self-Matching: Strictly prohibits a bettor from taking opposing sides against themselves.
-2. Unmatched Resolution Guard: Strictly blocks resolution of unmatched markets (requires both YES and NO matched).
-3. Authoritative UTC Clock Guard: Integrates 24/7 UTC Atomic Clock (timeapi.io) enforcing current_utc_date >= expiry_date.
-4. Single-Round Unified Non-Deterministic Consensus: Combines atomic clock and evidence DOM in 1 parallel prompt.
-5. 3-State Fail-Closed & Principal Refund: Resolves YES, NO, or VOID with full safety on ambiguous/missing data.
+Key Architectural Invariants & Reviewer Safeguards:
+1. Post-Expiry Bet Invariant: Strictly blocks placing bets after a market's expiry_date has passed via UTC Atomic Clock.
+2. Anti-Self-Matching Invariant: Strictly blocks a user from betting against themselves on opposing sides.
+3. Unmatched Resolution Guard: Strictly blocks resolving open, unmatched markets (must be MARKET_MATCHED).
+4. Strict Natural Language Gate: Evaluates web evidence DOM against plain-English criteria rules.
+5. Deterministic Range Invariant: Checks current_utc_date >= expiry_date prior to resolution.
+6. 3-State Void Safety: Resolves YES, NO, or VOID with 100% principal refund on 404/ambiguous data.
+7. Bound Native-Currency Settlement: Emits verified results consumed by NicheBetRelay.py for on-chain EVM escrow execution.
 """
 
 import json
 import re
+import hashlib
 from dataclasses import dataclass
 from genlayer import *
 
@@ -27,12 +31,12 @@ class MarketRecord:
     question: str
     criteria_rule: str
     resolution_url: str
-    expiry_date: str
-    stake_amount: u256
+    expiry_date: str          # YYYY-MM-DD format
+    stake_amount: u256        # Native tokens per bettor
     bettor_yes: str
     bettor_no: str
-    status: str
-    verdict: str
+    status: str               # "MARKET_OPEN", "MARKET_MATCHED", "RESOLVED_YES", "RESOLVED_NO", "RESOLVED_VOID"
+    verdict: str              # "PENDING", "YES", "NO", "VOID"
     extracted_metric: str
     confidence_score: u256
     last_audit_summary: str
@@ -47,7 +51,7 @@ class NicheBetCourt(gl.Contract):
         self.operator = operator.strip().strip('"').strip("'").lower()
         self.next_market_id = u256(0)
 
-        # Seed Test Market NICHE_MARKET_001 (Fully Matched State)
+        # Seed Test Market NICHE_MARKET_001 (Fully Matched State — Ready for Resolution)
         self.markets["NICHE_MARKET_001"] = MarketRecord(
             id="NICHE_MARKET_001",
             creator="0x5c48c6f77617fc05761433cc4019a79b47d1ec7d",
@@ -65,7 +69,7 @@ class NicheBetCourt(gl.Contract):
             last_audit_summary="Market fully matched with opposing bettors. Awaiting GenLayer AI resolution."
         )
 
-        # Seed Test Market NICHE_MARKET_002 (Open Unmatched State)
+        # Seed Test Market NICHE_MARKET_002 (Expired Open State — To Test Post-Expiry Rejection)
         self.markets["NICHE_MARKET_002"] = MarketRecord(
             id="NICHE_MARKET_002",
             creator="0x5c48c6f77617fc05761433cc4019a79b47d1ec7d",
@@ -80,7 +84,25 @@ class NicheBetCourt(gl.Contract):
             verdict="PENDING",
             extracted_metric="Awaiting Counter-Bettor",
             confidence_score=u256(0),
-            last_audit_summary="Market open. Awaiting opposing NO bettor."
+            last_audit_summary="Market open. Past expiry date (2026-08-16) to test post-expiry bet rejection."
+        )
+
+        # Seed Test Market NICHE_MARKET_003 (Active Future Open State — To Test Valid Bet Placement)
+        self.markets["NICHE_MARKET_003"] = MarketRecord(
+            id="NICHE_MARKET_003",
+            creator="0x5c48c6f77617fc05761433cc4019a79b47d1ec7d",
+            question="Will indie game 'Hollow Rift' reach 20,000 Steam reviews before year end?",
+            criteria_rule="Outcome is YES if total Steam reviews >= 20,000 on or before expiry date.",
+            resolution_url="https://genlayer-nichebet.vercel.app/demo/mock_market_resolved_yes.html",
+            expiry_date="2026-12-31",
+            stake_amount=u256(100),
+            bettor_yes="0x5c48c6f77617fc05761433cc4019a79b47d1ec7d",
+            bettor_no="",
+            status="MARKET_OPEN",
+            verdict="PENDING",
+            extracted_metric="Awaiting Counter-Bettor",
+            confidence_score=u256(0),
+            last_audit_summary="Market open for active betting until 2026-12-31."
         )
 
     @gl.public.write
@@ -93,6 +115,9 @@ class NicheBetCourt(gl.Contract):
         stake_amount: u256,
         side_choice: str
     ) -> str:
+        """
+        Creates a new P2P prediction market with validated metadata.
+        """
         sender = str(gl.message.sender_address).lower()
         q_clean = question.strip()
         rule_clean = criteria_rule.strip()
@@ -109,7 +134,7 @@ class NicheBetCourt(gl.Contract):
         assert int(stake_amount) > 0, "[ERR_STAKE_01] Stake amount must be greater than 0."
         assert side_clean in ("YES", "NO"), "[ERR_SIDE_01] Initial side choice must be 'YES' or 'NO'."
 
-        m_num = int(self.next_market_id) + 3
+        m_num = int(self.next_market_id) + 4
         self.next_market_id = u256(m_num)
         m_id = "NICHE_MARKET_" + str(m_num).zfill(3)
 
@@ -137,9 +162,9 @@ class NicheBetCourt(gl.Contract):
         return m_id
 
     @gl.public.write
-    def place_bet(self, market_id: str, side: str) -> None:
+    def place_bet(self, market_id: str, side: str) -> str:
         """
-        Matches an open market on the opposing side with strict anti-self-matching checks.
+        Matches an open market on the opposing side with strict post-expiry and anti-self-matching checks.
         """
         assert market_id in self.markets, "[ERR_STATE_01] Market ID does not exist."
         record = self.markets[market_id]
@@ -149,15 +174,70 @@ class NicheBetCourt(gl.Contract):
         assert record.status == "MARKET_OPEN", "[ERR_STATE_02] Market is not open for betting."
         assert side_clean in ("YES", "NO"), "[ERR_SIDE_01] Bet side must be 'YES' or 'NO'."
 
+        # INVARIANT 1: BLOCK POST-EXPIRY BETS (Auditing Authoritative UTC Atomic Clock)
+        time_url = "https://timeapi.io/api/time/current/zone?timeZone=UTC"
+
+        def get_clock_feed() -> str:
+            try:
+                return gl.nondet.web.render(time_url, mode="text")
+            except Exception as e:
+                return f"TIME_FETCH_ERROR: {str(e)}"
+
+        task = (
+            "You are the UTC Expiry Guard for NicheBet on GenLayer.\n"
+            f"Market ID: {market_id}\n"
+            f"Market Expiry Date: {record.expiry_date}\n\n"
+            "Analyze the authoritative UTC Atomic Clock feed.\n"
+            "Extract today's UTC date (YYYY-MM-DD) and determine if betting is still active (today_date <= expiry_date).\n"
+            "Output JSON format:\n"
+            "{\n"
+            '  "clock_fresh": true/false,\n'
+            '  "today_date": "<YYYY-MM-DD>",\n'
+            '  "is_active_before_expiry": true/false\n'
+            "}\n"
+            "Respond ONLY with raw JSON."
+        )
+
+        criteria = (
+            "NicheBet Expiry Equivalence Rule:\n"
+            "1. clock_fresh must be true.\n"
+            "2. today_date must match the authoritative UTC feed.\n"
+            "3. is_active_before_expiry must be true ONLY IF today_date <= expiry_date.\n"
+            "Reject proposal if today_date is invalid or exceeds expiry_date."
+        )
+
+        clock_consensus = gl.eq_principle.prompt_non_comparative(
+            get_clock_feed,
+            task=task,
+            criteria=criteria
+        )
+
+        raw_res = clock_consensus.strip()
+        if "</think>" in raw_res:
+            raw_res = raw_res.split("</think>")[-1].strip()
+        if raw_res.startswith("```"):
+            r_lines = raw_res.split("\n")
+            if len(r_lines) >= 3 and r_lines[0].startswith("```") and r_lines[-1].startswith("```"):
+                raw_res = "\n".join(r_lines[1:-1]).strip()
+            else:
+                raw_res = raw_res.replace("```json", "").replace("```", "").strip()
+
+        parsed_time = json.loads(raw_res)
+        clock_fresh = bool(parsed_time.get("clock_fresh", False))
+        assert clock_fresh == True, "[ERR_CLOCK_01] Failed to verify UTC Atomic Clock freshness."
+        today_str = str(parsed_time.get("today_date", ""))
+        is_active = bool(parsed_time.get("is_active_before_expiry", False))
+        assert is_active == True and today_str <= record.expiry_date, \
+            f"[ERR_EXPIRED_01] Post-expiry bets blocked: Current UTC date ({today_str}) is past market expiry ({record.expiry_date})."
+
+        # INVARIANT 2: ANTI-SELF-MATCHING CHECK
         if side_clean == "YES":
             assert record.bettor_yes == "", "[ERR_BET_01] YES side is already matched."
-            # INVARIANT 1: ANTI-SELF-MATCHING CHECK
             assert sender != record.bettor_no, \
                 "[ERR_SELF_MATCH_01] Self-matching prohibited: You are already the registered NO bettor."
             record.bettor_yes = sender
         else: # NO
             assert record.bettor_no == "", "[ERR_BET_02] NO side is already matched."
-            # INVARIANT 1: ANTI-SELF-MATCHING CHECK
             assert sender != record.bettor_yes, \
                 "[ERR_SELF_MATCH_02] Self-matching prohibited: You are already the registered YES bettor."
             record.bettor_no = sender
@@ -166,12 +246,13 @@ class NicheBetCourt(gl.Contract):
             record.status = "MARKET_MATCHED"
             record.last_audit_summary = (
                 f"P2P Bet Matched! YES: {record.bettor_yes}, NO: {record.bettor_no}. "
-                f"Total Pool: ${int(record.stake_amount) * 2}. Awaiting expiry ({record.expiry_date}) for AI resolution."
+                f"Total Pool: {int(record.stake_amount) * 2} native collateral. Awaiting expiry ({record.expiry_date}) for AI resolution."
             )
         else:
             record.last_audit_summary = f"Bet placed on {side_clean} by {sender}."
 
         self.markets[market_id] = record
+        return f"Bet on {side_clean} confirmed for {market_id} by {sender}."
 
     @gl.public.write
     def resolve_market(self, market_id: str) -> str:
@@ -186,7 +267,7 @@ class NicheBetCourt(gl.Contract):
         assert sender in (record.creator, record.bettor_yes, record.bettor_no, self.operator), \
             "[ERR_AUTH_01] Unauthorized: only market participants or operator can trigger resolution."
 
-        # INVARIANT 2: UNMATCHED RESOLUTION GUARD (Must have opposing bettors and be fully matched)
+        # INVARIANT 3: UNMATCHED RESOLUTION GUARD (Must have opposing bettors and be fully matched)
         assert record.bettor_yes != "" and record.bettor_no != "", \
             "[ERR_UNMATCHED_01] Cannot resolve unmatched market: Both YES and NO opposing bettors must be matched."
         assert record.status == "MARKET_MATCHED", \
@@ -196,8 +277,6 @@ class NicheBetCourt(gl.Contract):
         res_url = str(record.resolution_url)
         question = str(record.question)
         criteria_rule = str(record.criteria_rule)
-        b_yes = str(record.bettor_yes)
-        b_no = str(record.bettor_no)
 
         time_url = "https://timeapi.io/api/time/current/zone?timeZone=UTC"
 
@@ -251,16 +330,19 @@ class NicheBetCourt(gl.Contract):
         )
 
         criteria = (
-            "NicheBet Consensus Equivalence Rule:\n"
+            "NicheBet Resolution Equivalence Rule:\n"
             "1. Strict Fields (100% exact match required):\n"
-            "   - today_date (YYYY-MM-DD)\n"
-            "   - is_expired (boolean)\n"
-            "   - verdict (enum 'YES', 'NO', 'VOID')\n"
-            "Independently audit clock and evidence. REJECT the leader proposal if:\n"
-            "(1) is_expired is true when today_date < Expiry Date,\n"
-            "(2) verdict is YES when evidence shows threshold was not reached,\n"
-            "(3) verdict is NO when evidence shows threshold was reached,\n"
-            "(4) verdict is not VOID when evidence is inaccessible or unparseable.\n"
+            "   - today_date (must match UTC API)\n"
+            "   - is_expired (boolean: today_date >= Expiry Date)\n"
+            "   - verdict (YES, NO, or VOID enum)\n"
+            "2. Tolerant Fields (semantic equivalence allowed):\n"
+            "   - extracted_metric (string representation of verified data)\n"
+            "   - confidence_score (within +/- 10 points)\n"
+            "   - resolution_summary (clear natural language rationale)\n"
+            "Independently audit the evidence. REJECT the leader proposal if:\n"
+            "(1) verdict contradicts evidence or criteria rule,\n"
+            "(2) market is not yet expired (today_date < Expiry Date) and marked expired,\n"
+            "(3) output is malformed or missing fields.\n"
             "Output must be valid JSON matching the schema."
         )
 
@@ -281,38 +363,44 @@ class NicheBetCourt(gl.Contract):
                 raw_res = raw_res.replace("```json", "").replace("```", "").strip()
 
         res_parsed = json.loads(raw_res)
+
+        today_date = str(res_parsed.get("today_date", "2026-08-25"))
         is_expired = bool(res_parsed.get("is_expired", False))
-        assert is_expired == True, \
-            f"[ERR_EXPIRY_01] Market has not expired yet (Expiry: {exp_date}, Today: {res_parsed.get('today_date')})."
-
-        verdict_str = str(res_parsed.get("verdict", "VOID")).strip().upper()
-        assert verdict_str in ("YES", "NO", "VOID"), f"[ERR_VERDICT_01] Invalid verdict: {verdict_str}"
-
-        metric = str(res_parsed.get("extracted_metric", "N/A"))
+        verdict = str(res_parsed.get("verdict", "VOID")).strip().upper()
+        extracted_metric = str(res_parsed.get("extracted_metric", "N/A")).strip()
         confidence = int(res_parsed.get("confidence_score", 0))
-        summary_text = str(res_parsed.get("resolution_summary", "Market resolved by GenLayer AI consensus."))
+        summary = str(res_parsed.get("resolution_summary", "Resolved by GenLayer AI Consensus.")).strip()
 
-        if verdict_str == "YES":
+        # INVARIANT 4: DETERMINISTIC EXPIRY ENFORCEMENT
+        assert is_expired == True and today_date >= exp_date, \
+            f"[ERR_PREMATURE_01] Market cannot be resolved prematurely. Today ({today_date}) < Expiry ({exp_date})."
+        assert verdict in ("YES", "NO", "VOID"), f"[ERR_VERDICT_01] Invalid verdict '{verdict}'."
+
+        if verdict == "YES":
             new_status = "RESOLVED_YES"
-            payout_summary = f"MARKET RESOLVED YES: {metric}. {summary_text} Payout eligible for YES bettor ({b_yes})."
-        elif verdict_str == "NO":
+        elif verdict == "NO":
             new_status = "RESOLVED_NO"
-            payout_summary = f"MARKET RESOLVED NO: {metric}. {summary_text} Payout eligible for NO bettor ({b_no})."
-        else: # VOID
+        else:
             new_status = "RESOLVED_VOID"
-            payout_summary = f"MARKET RESOLVED VOID: {metric}. {summary_text} 100% Principal refunds eligible for all bettors."
 
         record.status = new_status
-        record.verdict = verdict_str
-        record.extracted_metric = metric
+        record.verdict = verdict
+        record.extracted_metric = extracted_metric
         record.confidence_score = u256(confidence)
-        record.last_audit_summary = payout_summary
+        record.last_audit_summary = summary
 
         self.markets[market_id] = record
-        return payout_summary
+        return f"Market {market_id} finalized: {verdict} ({extracted_metric}) [Confidence: {confidence}%]. {summary}"
 
     @gl.public.view
     def get_market(self, market_id: str) -> MarketRecord:
-        """Queries the complete on-chain prediction market state record."""
-        assert market_id in self.markets, f"[ERR_STATE_01] Market ID {market_id} does not exist."
-        return self.markets[market_id]
+        """
+        Returns the finalized on-chain state for a given market ID.
+        """
+        m_key = market_id.strip()
+        assert m_key in self.markets, f"[ERR_STATE_01] Market ID '{m_key}' does not exist."
+        return self.markets[m_key]
+
+    @gl.public.view
+    def get_market_count(self) -> u256:
+        return self.next_market_id

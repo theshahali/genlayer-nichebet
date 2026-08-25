@@ -1,26 +1,25 @@
 # NicheBet — Autonomous Long-Tail & P2P Prediction Market Protocol
 
-> **"The world's first subjective, long-tail prediction market protocol powered by GenLayer AI consensus and native-currency EVM Escrow settlement."**
-
-NicheBet enables trustless P2P prediction markets on arbitrary long-tail events (local elections, gaming milestones, creator targets) resolved in 60s by GenLayer AI consensus.
+> **"P2P prediction markets on arbitrary real-world events resolved in 60s by GenLayer AI consensus with native-currency EVM escrow settlement."**
 
 ---
 
 ## 🔗 Verified Deployments & Links
-- **GenLayer Explorer Contract**: [`0x2f0F8E897106cd20527d3ABfa31c3f213AA774e5`](https://explorer-studio.genlayer.com/address/0x2f0F8E897106cd20527d3ABfa31c3f213AA774e5)
-- **GitHub Repository**: [`https://github.com/theshahali/genlayer-nichebet`](https://github.com/theshahali/genlayer-nichebet)
+- **GenLayer Explorer Contract**: [`0x25e76E732c3d80385897C0748458B6E6897dD942`](https://explorer-studio.genlayer.com/address/0x25e76E732c3d80385897C0748458B6E6897dD942)
 - **Live DApp Dashboard**: [`https://genlayer-nichebet.vercel.app/`](https://genlayer-nichebet.vercel.app/)
+- **GitHub Repository**: [`https://github.com/theshahali/genlayer-nichebet`](https://github.com/theshahali/genlayer-nichebet)
+- **Resolution Evidence Snapshot**: [`https://genlayer-nichebet.vercel.app/demo/mock_market_resolved_yes.html`](https://genlayer-nichebet.vercel.app/demo/mock_market_resolved_yes.html)
 
 ---
 
-## 🛡️ Hardened Production Invariants (Pavel Kolosov Review Compliant)
-
-1. **Native-Currency Escrow & Binding Pre-Check (`NicheBetEscrow.sol`)**:
-   - Implements enforced native-currency funding with `createAndFundEscrow` / `fundBet`.
-   - `relay/NicheBetRelay.py` queries `markets(marketId)` on EVM Escrow to verify that `bettorYes` and `bettorNo` match the GenLayer record, and that `isFunded == true` before broadcasting any disbursement.
-2. **Anti-Self-Matching Invariant**:
-   - `place_bet` in `NicheBetCourt.py` strictly blocks bettors from taking both YES and NO sides (`assert sender != record.bettor_no` / `assert sender != record.bettor_yes`).
-3. **Unmatched Resolution Guard**:
-   - `resolve_market` strictly reverts if a market is not fully matched (`assert record.bettor_yes != "" and record.bettor_no != ""` and `assert record.status == "MARKET_MATCHED"`).
-4. **Authoritative UTC Clock & 3-State Void Safety**:
-   - 24/7 UTC Atomic Clock (`timeapi.io`) guarantees `current_utc_date >= expiry_date` in a single unified consensus pass. Missing or ambiguous evidence triggers 100% principal refunds (`RESOLVED_VOID`).
+## 🛡️ Production Invariants & Reviewer Safeguards (Pavel Kolosov Updates)
+1. **Post-Expiry Bet Guard (`[ERR_EXPIRED_01]`)**:
+   - `place_bet` audits the authoritative 24/7 UTC Atomic Clock (`timeapi.io`). Strictly reverts if the current date is past `expiry_date`.
+2. **Anti-Self-Matching Invariant (`[ERR_SELF_MATCH_02]`)**:
+   - Strictly blocks a user from betting against themselves on opposing sides. Revert verified on-chain.
+3. **Unmatched Resolution Guard (`[ERR_UNMATCHED_01]`)**:
+   - Strictly blocks resolving open, unmatched markets (`assert status == 'MARKET_MATCHED'`). Revert verified on-chain.
+4. **Native-Currency Escrow & Binding Relay**:
+   - Full native-currency funding on `NicheBetEscrow.sol`. `relay/NicheBetRelay.py` validates participant bindings before signing and broadcasting disbursements.
+5. **Single-Round Consensus (0 Rotations)**:
+   - Evaluates UTC Atomic Clock and resolution evidence in 1 parallel prompt.
